@@ -1,0 +1,272 @@
+<!DOCTYPE html> 
+<html lang="zh-Hant" class="dark"> 
+<head> 
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> 
+    <title>香港氣象追擊網 | 集合模式預報</title> 
+    <link rel="icon" href="GHMWS.png" type="image/png">
+    
+    <script src="https://cdn.tailwindcss.com"></script> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+     
+    <script> 
+        tailwind.config = { 
+            darkMode: 'class',
+            theme: { 
+                extend: { 
+                    colors: { 
+                        brand: {
+                            50: '#f0f9ff',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            900: '#0c4a6e',
+                        },
+                        darkBg: '#0f172a',
+                        cardBg: '#1e293b'
+                    }, 
+                } 
+            } 
+        } 
+    </script> 
+     
+    <style type="text/tailwindcss"> 
+        @layer utilities { 
+            .weather-card { 
+                @apply bg-slate-900 border border-slate-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:border-slate-700; 
+            } 
+            .nav-link { 
+                @apply px-4 py-3 text-slate-200 hover:text-white hover:bg-sky-600/30 text-sm font-medium transition-all duration-200 rounded-md whitespace-nowrap; 
+            }
+            .select-box { 
+                @apply border border-slate-700 rounded-lg p-2.5 flex justify-between items-center cursor-pointer bg-slate-800 text-slate-200 text-sm focus:border-sky-500 transition-colors; 
+            }
+            .select-dropdown { 
+                @apply absolute left-0 right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 overflow-hidden; 
+            }
+            .select-option { 
+                @apply p-2.5 text-sm text-slate-300 hover:bg-sky-600/30 hover:text-white cursor-pointer transition-colors; 
+            }
+            .input-box { 
+                @apply w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-sky-500 transition-colors placeholder-slate-500; 
+            }
+            .model-img { 
+                @apply mx-auto max-w-full h-auto block rounded-lg; 
+            }
+        } 
+        
+        body { 
+            background-color: #0b0f19; 
+            color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; 
+        } 
+    </style> 
+</head> 
+
+<body class="min-h-screen flex flex-col antialiased"> 
+    
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 py-3 sticky top-0 z-50 backdrop-blur-md bg-opacity-90">
+        <div class="container mx-auto px-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img src="GHMWS.png" class="w-10 h-10 object-contain" alt="Logo">
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        香港氣象追擊網
+                        <span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-normal">HKMETC</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 tracking-wider">Guangdong-Hong Kong-Macao Weather Station</p>
+                </div>
+            </div>
+            
+            <div class="hidden md:flex items-center gap-4 text-xs text-slate-400">
+                <span>系統運作正常</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="bg-slate-900/80 border-b border-slate-800/80 sticky top-[65px] z-40 backdrop-blur-md">
+        <div class="container mx-auto px-4">
+            <ul class="flex items-center gap-1 overflow-x-auto py-1.5 scrollbar-none">
+                <li><a href="https://zax41006-bot.github.io/GHMWS/index.html" class="nav-link">首頁</a></li>
+                <li><a href="https://zax41006-bot.github.io/GHMWS-TC-GIS/" class="nav-link">熱帶氣旋資訊</a></li>
+                <li><a href="https://eknlau5897.github.io/GHMWS-realtime/index.html" class="nav-link">實況天氣</a></li>
+                <li><a href="https://eknlau5897.github.io/GHMWS-global-model/index.html" class="nav-link">全球模式預報</a></li>
+                <li><a href="https://eknlau5897.github.io/GHMWS-meso-model/index.html" class="nav-link">中尺度模式預報</a></li>
+                <li><a href="https://zax41006-bot.github.io/GHMWS/ensemble.html" class="nav-link bg-sky-600/20 text-sky-400">集合模式預報</a></li>
+                <li><a href="https://lc2nz3kv-5500.asse.devtunnels.ms/demo/?skip_tunnel_warning=true/" class="nav-link">地球風場動畫3D</a></li>
+                <li><a href="https://eknlau5897.github.io/GHMWS-nowcast/index.html" class="nav-link">臨近降雨預報</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6 flex-grow max-w-6xl">
+        <div class="text-center mb-6">
+            <h2 class="text-2xl md:text-3xl font-bold text-white tracking-wide mb-1">集合模式預報</h2>
+            <p id="updateTimeText" class="text-sky-400 font-medium text-sm mt-1">發佈/更新時間：載入中...</p>
+        </div>
+
+        <!-- Controls & Image Display Card -->
+        <div class="weather-card mb-6">
+            <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 relative">
+                <!-- 1. Select Model -->
+                <div class="relative">
+                    <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">1. 選擇模式</label>
+                    <div id="modelSelectBox" class="select-box">
+                        <span id="modelSelectText">ECMWF</span>
+                        <i class="fa fa-caret-down text-sky-400"></i>
+                    </div>
+                    <div id="modelDropdown" class="select-dropdown hidden">
+                        <div class="select-option" data-model="ECMWF">ECMWF</div>
+                        <div class="select-option" data-model="AIFS">AIFS</div>
+                        <div class="select-option" data-model="FNV3">FNV3</div>
+                        <div class="select-option" data-model="GENC">GENC</div>
+                    </div>
+                </div>
+
+                <!-- 2. Date Input -->
+                <div>
+                    <label for="dateInput" class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">2. 輸入日期 (YYYY-MM-DD)</label>
+                    <input type="text" id="dateInput" class="input-box" placeholder="例如: 2026-08-16">
+                </div>
+
+                <!-- 3. Time Input -->
+                <div>
+                    <label for="timeInput" class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">3. 輸入時效 (TT)</label>
+                    <input type="text" id="timeInput" class="input-box" placeholder="例如: 00 或 12" maxlength="2">
+                </div>
+            </div>
+
+            <div class="px-5 pb-5 text-right border-b border-slate-800">
+                <button id="updateBtn" class="bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm px-6 py-2.5 rounded-lg shadow-lg shadow-sky-600/20 transition-all duration-200">
+                    <i class="fa fa-sync-alt mr-1.5"></i> 更新預報圖
+                </button>
+            </div>
+
+            <div class="p-6 bg-slate-950/50 min-h-[300px] flex items-center justify-center">
+                <img id="modelImage" src="" class="model-img shadow-2xl border border-slate-800" alt="模式預報圖 載入中或路徑不存在">
+            </div>
+        </div>
+
+        <!-- Instructions Card -->
+        <div class="weather-card p-5 bg-sky-950/20 border-sky-500/20">
+            <h3 class="font-bold mb-3 text-base text-sky-300 flex items-center gap-2">
+                <i class="fa-solid fa-circle-info"></i> 使用說明
+            </h3>
+            <ul class="space-y-1.5 text-xs md:text-sm text-slate-300 leading-relaxed">
+                <li class="flex items-start gap-2">
+                    <span class="text-sky-400">•</span> 請選擇預報模式，並輸入欲查詢的起報日期與起報時效。
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-sky-400">•</span> 日期格式請務必採用 <strong class="text-white">YYYY-MM-DD</strong>。
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-sky-400">•</span> 時效格式請務必採用 <strong class="text-white">TT</strong> 雙位數數字 (如 00 代表 00Z，12 代表 12Z)。
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-sky-400">•</span> 點擊「更新預報圖」按鈕或在輸入框按 Enter 即可加載對應圖片。
+                </li>
+            </ul>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-6 mt-12 text-center text-slate-400 text-xs">
+        <p class="text-sm font-semibold text-slate-200">香港氣象追擊網 Hong Kong Met Chasing</p>
+        <p class="mt-2 text-slate-500">© 2026 香港氣象追擊網 版權所有</p>
+    </footer>
+
+    <script>
+        // App Core State
+        let currentModel = "ECMWF";
+        const currentFxx = 240; 
+
+        // DOM Elements
+        const img = document.getElementById("modelImage");
+        const updateTimeText = document.getElementById("updateTimeText");
+        const modelSelectText = document.getElementById("modelSelectText");
+        const modelDropdown = document.getElementById("modelDropdown");
+        const dateInput = document.getElementById("dateInput");
+        const timeInput = document.getElementById("timeInput");
+        const updateBtn = document.getElementById("updateBtn");
+
+        /**
+         * Calculates the latest available model date and run time based on current UTC time.
+         */
+        function setLatestDateAndTime() {
+            const now = new Date();
+            const utcHour = now.getUTCHours();
+            
+            let runTime = "00";
+            
+            if (utcHour >= 18) {
+                runTime = "12";
+            } else if (utcHour >= 6) {
+                runTime = "00";
+            } else {
+                runTime = "12";
+                now.setUTCDate(now.getUTCDate() - 1);
+            }
+
+            const year = now.getUTCFullYear();
+            const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(now.getUTCDate()).padStart(2, '0');
+
+            dateInput.value = `${year}-${month}-${day}`;
+            timeInput.value = runTime;
+        }
+
+        // Main Image URL Builder Function
+        function updateImageSource() {
+            let rawDate = dateInput.value.trim();
+            let rawTime = timeInput.value.trim();
+
+            let sanitizedDate = rawDate.replace(/-/g, ""); 
+            let formattedTime = rawTime.toUpperCase().endsWith("Z") ? rawTime.toUpperCase() : rawTime + "Z";
+
+            if (!sanitizedDate || !rawTime) {
+                alert("請完整填寫日期與時效！");
+                return;
+            }
+
+            const imagePath = `ensemble-track/wp/${currentModel}/${sanitizedDate}/${formattedTime}/${currentFxx}.png`;
+            img.src = imagePath;
+
+            updateTimeText.innerText = `發佈/更新時間：${rawDate} (${formattedTime} run)`;
+        }
+
+        // Toggle Model Dropdown Menu
+        document.getElementById("modelSelectBox").addEventListener("click", (e) => {
+            e.stopPropagation();
+            modelDropdown.classList.toggle("hidden");
+        });
+
+        // Set values on selecting a model
+        document.querySelectorAll("#modelDropdown .select-option").forEach(option => {
+            option.addEventListener("click", () => {
+                currentModel = option.dataset.model;
+                modelSelectText.innerText = option.innerText;
+                modelDropdown.classList.add("hidden");
+                updateImageSource();
+            });
+        });
+
+        // Event listener hooks for buttons and text inputs
+        updateBtn.addEventListener("click", updateImageSource);
+
+        dateInput.addEventListener("keydown", (e) => { if (e.key === "Enter") updateImageSource(); });
+        timeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") updateImageSource(); });
+
+        document.addEventListener("click", (e) => {
+            if (!document.getElementById("modelSelectBox").contains(e.target)) {
+                modelDropdown.classList.add("hidden");
+            }
+        });
+
+        // Fire on system initiation
+        setLatestDateAndTime();
+        updateImageSource();
+    </script>
+</body>
+</html>
