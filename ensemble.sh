@@ -98,9 +98,11 @@ try:
     )
     df = df.dropna(subset=['year', 'month', 'day', 'hour', 'longitude', 'latitude']).copy()
 
+    # FIX 1: Robust zero-padding for typicalTime to format as HHMMSS before parsing
     b_date = df['typicalDate'].astype(int).astype(str)
-    b_time = df['typicalTime'].astype(int).astype(str).str.zfill(4) 
-    df['base_dt'] = pd.to_datetime((b_date + b_time).str[:12], format='%Y%m%d%H%M')
+    b_time = df['typicalTime'].astype(int).astype(str).str.zfill(6)
+    df['base_dt'] = pd.to_datetime(b_date + b_time, format='%Y%m%d%H%M%S', errors='coerce')
+    
     df['valid_dt'] = pd.to_datetime(df[['year', 'month', 'day', 'hour']])
     df['pressure'] = df['pressureReducedToMeanSeaLevel'] / 100.0
     df = df.rename(columns={"stormIdentifier": "track", "ensembleMemberNumber": "sample", "longitude": "lon", "latitude": "lat"})
@@ -171,7 +173,6 @@ import cartopy.feature as cfeature
 
 base_path = "/Users/eknlau/VS_code/HKMETC-ensemble/ensemble-track/wp"
 
-# Configured explicitly with lower-case endpoint keys (url_id)
 models = {
     "GENC": {"url_id": "genc", "title": "GENC Ensemble Tracks - HKMETC"},
     "FNV3": {"url_id": "fnv3", "title": "FNV3 Ensemble Tracks - HKMETC"},
@@ -187,7 +188,6 @@ for model_name, cfg in models.items():
     success = False
     url_id = cfg["url_id"]
     
-    # Expanded lookback to 48 hours to catch delayed upstream cycles
     for lookback_hours in range(0, 49, 6):
         now_utc = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
         
@@ -212,9 +212,11 @@ for model_name, cfg in models.items():
         dd = init_date_dt.strftime("%d")
         date_folder = f"{yyyy}{mm}{dd}"
         cycle_str = f"{init_time:02d}Z"
-        time_stamp_str = f"{yyyy}_{mm}_{dd}T{init_time:02d}_00"
         
-        # Uses explicit url_id (lowercase) to hit the Google Weather Lab API
+        # FIX 2: Weather Lab URL format uses unpadded hours (T0_00, T6_00, T12_00, T18_00)
+        hour_str = f"{init_time}"
+        time_stamp_str = f"{yyyy}_{mm}_{dd}T{hour_str}_00"
+        
         target_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{url_id}/ensemble/cyclogenesis/csv/{url_id}_{time_stamp_str}_cyclogenesis.csv"
         
         try:
