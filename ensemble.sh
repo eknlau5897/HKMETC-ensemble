@@ -140,7 +140,6 @@ try:
     cbar = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), ax=ax, pad=0.03, fraction=0.04, aspect=30)
     cbar.set_label('Minimum Sea Level Pressure (hPa)', fontsize=10, labelpad=10, fontweight='bold')
 
-    # 改為 HKMETC
     plt.title(f"{title_prefix} Ensemble Tracks - HKMETC", fontsize=16, fontweight='bold', pad=40, color=title_color)
     plt.text(0.5, 1.05, subtitle, transform=ax.transAxes, ha='center', fontsize=13, fontweight='bold', color='#333333')
     plt.text(0.5, 1.02, f"Initial Time: {base_time_str}", transform=ax.transAxes, ha='center', fontsize=11, color='#546e7a')
@@ -172,11 +171,11 @@ import cartopy.feature as cfeature
 
 base_path = "/Users/eknlau/VS_code/HKMETC-ensemble/ensemble-track/wp"
 
-# 所有標題改為 HKMETC
+# Configured explicitly with lower-case endpoint keys (url_id)
 models = {
-    "GENC": {"title": "GENC Ensemble Tracks - HKMETC"},
-    "FNV3": {"title": "FNV3 Ensemble Tracks - HKMETC"},
-    "WNC":  {"title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
+    "GENC": {"url_id": "genc", "title": "GENC Ensemble Tracks - HKMETC"},
+    "FNV3": {"url_id": "fnv3", "title": "FNV3 Ensemble Tracks - HKMETC"},
+    "WNC":  {"url_id": "wnc",  "title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
 }
 
 bounds = [900, 915, 930, 945, 960, 970, 980, 990, 1000, 1010]
@@ -186,8 +185,10 @@ norm = mcolors.BoundaryNorm(bounds, cmap.N)
 for model_name, cfg in models.items():
     print(f"[{datetime.now()}] Initializing search engine for {model_name}...")
     success = False
+    url_id = cfg["url_id"]
     
-    for lookback_hours in range(0, 25, 6):
+    # Expanded lookback to 48 hours to catch delayed upstream cycles
+    for lookback_hours in range(0, 49, 6):
         now_utc = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
         
         if now_utc.hour >= 19:
@@ -213,11 +214,13 @@ for model_name, cfg in models.items():
         cycle_str = f"{init_time:02d}Z"
         time_stamp_str = f"{yyyy}_{mm}_{dd}T{init_time:02d}_00"
         
-        target_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{model_name}/ensemble/cyclogenesis/csv/{model_name}_{time_stamp_str}_cyclogenesis.csv"
+        # Uses explicit url_id (lowercase) to hit the Google Weather Lab API
+        target_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{url_id}/ensemble/cyclogenesis/csv/{url_id}_{time_stamp_str}_cyclogenesis.csv"
         
         try:
             r = requests.get(target_url, timeout=10)
             if r.status_code != 200 or r.text.lstrip().startswith("<!DOCTYPE html>") or "<html" in r.text.lower():
+                print(f"    [DEBUG] Skipping {model_name} ({date_folder} {cycle_str}): HTTP {r.status_code}")
                 continue
                 
             path_2 = f"{base_path}/{model_name}"
@@ -233,6 +236,7 @@ for model_name, cfg in models.items():
                 
             df_2 = pd.read_csv(local_csv_path, comment='#')
             if df_2.empty:
+                print(f"    [DEBUG] CSV empty for {model_name} ({date_folder} {cycle_str})")
                 continue
                 
             if 'minimum_sea_level_pressure_hpa' in df_2.columns:
