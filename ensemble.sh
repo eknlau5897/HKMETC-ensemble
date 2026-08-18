@@ -158,6 +158,9 @@ EOF
     # =========================================================
     # 2. GOOGLE WEATHER LAB PIPELINE (GENC, FNV3 & WNC/FNV3.2)
     # =========================================================
+   # =========================================================
+    # 2. GOOGLE WEATHER LAB PIPELINE (HARDENED DIAGNOSTIC)
+    # =========================================================
     echo "--> Running Google Weather Lab Engine (GENC, FNV3 & WNC/FNV3.2)..."
     python3.11 << 'EOF'
 import os
@@ -188,24 +191,13 @@ for model_name, cfg in models.items():
     success = False
     url_id = cfg["url_id"]
     
-    for lookback_hours in range(0, 49, 6):
+    # AI models publish primarily on 00Z and 12Z runs with a lag
+    for lookback_hours in range(6, 121, 6):
         now_utc = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
         
-        if now_utc.hour >= 19:
-            init_date_dt = now_utc
-            init_time = 12
-        elif now_utc.hour >= 13:
-            init_date_dt = now_utc
-            init_time = 6
-        elif now_utc.hour >= 7:
-            init_date_dt = now_utc
-            init_time = 0
-        elif now_utc.hour >= 1:
-            init_date_dt = now_utc - timedelta(days=1)
-            init_time = 18
-        else:
-            init_date_dt = now_utc - timedelta(days=1)
-            init_time = 12
+        # Snap to 12Z or 00Z cycles
+        init_time = 12 if now_utc.hour >= 12 else 0
+        init_date_dt = now_utc.replace(hour=init_time, minute=0, second=0, microsecond=0)
 
         yyyy = init_date_dt.strftime("%Y")
         mm = init_date_dt.strftime("%m")
@@ -213,18 +205,30 @@ for model_name, cfg in models.items():
         date_folder = f"{yyyy}{mm}{dd}"
         cycle_str = f"{init_time:02d}Z"
         
-        # FIX 2: Weather Lab URL format uses unpadded hours (T0_00, T6_00, T12_00, T18_00)
-        hour_str = f"{init_time}"
-        time_stamp_str = f"{yyyy}_{mm}_{dd}T{hour_str}_00"
+        # Try both timestamp variants (e.g. T0_00/T12_00 vs T00_00/T12_00)
+        timestamp_candidates = [
+            f"{yyyy}_{mm}_{dd}T{init_time}_00",
+            f"{yyyy}_{mm}_{dd}T{init_time:02d}_00"
+        ]
         
-        target_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{url_id}/ensemble/cyclogenesis/csv/{url_id}_{time_stamp_str}_cyclogenesis.csv"
-        
-        try:
-            r = requests.get(target_url, timeout=10)
-            if r.status_code != 200 or r.text.lstrip().startswith("<!DOCTYPE html>") or "<html" in r.text.lower():
-                print(f"    [DEBUG] Skipping {model_name} ({date_folder} {cycle_str}): HTTP {r.status_code}")
+        r = None
+        target_url = ""
+        for ts_str in timestamp_candidates:
+            candidate_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{url_id}/ensemble/cyclogenesis/csv/{url_id}_{ts_str}_cyclogenesis.csv"
+            try:
+                res = requests.get(candidate_url, timeout=8)
+                if res.status_code == 200 and not res.text.lstrip().startswith("<!DOCTYPE html>") and "<html" not in res.text.lower():
+                    r = res
+                    target_url = candidate_url
+                    break
+            except Exception:
                 continue
-                
+
+        if r is None:
+            print(f"    [DEBUG] Skipping {model_name} ({date_folder} {cycle_str}): HTTP 404/Invalid")
+            continue
+            
+        try:
             path_2 = f"{base_path}/{model_name}"
             run_dir = os.path.join(path_2, date_folder, cycle_str)
             os.makedirs(run_dir, exist_ok=True)
@@ -285,7 +289,7 @@ for model_name, cfg in models.items():
             plt.savefig(latest_png, bbox_inches='tight')  
             plt.close(fig)
             
-            print(f"--> [SUCCESS] Processed {model_name} {cycle_str}!")
+            print(f"--> [SUCCESS] Processed {model_name} {cycle_str} via {target_url}!")
             success = True
             break 
             
