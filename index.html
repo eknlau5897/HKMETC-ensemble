@@ -96,7 +96,6 @@
                         <div class="select-option" data-model="AIFS">AIFS</div>
                         <div class="select-option" data-model="FNV3">FNV3</div>
                         <div class="select-option" data-model="GENC">GENC</div>
-                        <!-- 新增 WNC (FNV3.2) 選項 -->
                         <div class="select-option" data-model="WNC">WNC (FNV3.2)</div>
                     </div>
                 </div>
@@ -110,7 +109,7 @@
                 <!-- 3. Time Input -->
                 <div>
                     <label for="timeInput" class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">3. 輸入時效 (TT)</label>
-                    <input type="text" id="timeInput" class="input-box" placeholder="例如: 00 或 12" maxlength="2">
+                    <input type="text" id="timeInput" class="input-box" placeholder="例如: 00, 06, 12 或 18" maxlength="2">
                 </div>
             </div>
 
@@ -133,7 +132,7 @@
             <ul class="space-y-1.5 text-xs md:text-sm text-slate-300 leading-relaxed">
                 <li class="flex items-start gap-2"><span class="text-sky-400">•</span> 請選擇預報模式，並輸入欲查詢的起報日期與起報時效。</li>
                 <li class="flex items-start gap-2"><span class="text-sky-400">•</span> 日期格式請務必採用 <strong class="text-white">YYYY-MM-DD</strong>。</li>
-                <li class="flex items-start gap-2"><span class="text-sky-400">•</span> 時效格式請務必採用 <strong class="text-white">TT</strong> 雙位數數字 (如 00 代表 00Z，12 代表 12Z)。</li>
+                <li class="flex items-start gap-2"><span class="text-sky-400">•</span> 時效格式請務必採用 <strong class="text-white">TT</strong> 雙位數數字 (如 00 代表 00Z，06 代表 06Z，12 代表 12Z，18 代表 18Z)。</li>
                 <li class="flex items-start gap-2"><span class="text-sky-400">•</span> 點擊「更新預報圖」按鈕或在輸入框按 Enter 即可加載對應圖片。</li>
             </ul>
         </div>
@@ -160,20 +159,26 @@
         const updateBtn = document.getElementById("updateBtn");
 
         /**
-         * Calculates the latest available model date and run time based on current UTC time.
+         * Calculates the latest available model date and 6-hourly run time based on current UTC time.
+         * Aligns with the 00Z, 06Z, 12Z, 18Z cycles processed by the backend shell script.
          */
         function setLatestDateAndTime() {
             const now = new Date();
             const utcHour = now.getUTCHours();
             let runTime = "00";
 
-            if (utcHour >= 18) { 
-                runTime = "12"; 
-            } else if (utcHour >= 6) { 
-                runTime = "00"; 
-            } else { 
-                runTime = "12"; 
-                now.setUTCDate(now.getUTCDate() - 1); 
+            if (utcHour >= 20) {
+                runTime = "12";
+            } else if (utcHour >= 14) {
+                runTime = "06";
+            } else if (utcHour >= 8) {
+                runTime = "00";
+            } else if (utcHour >= 2) {
+                runTime = "18";
+                now.setUTCDate(now.getUTCDate() - 1);
+            } else {
+                runTime = "12";
+                now.setUTCDate(now.getUTCDate() - 1);
             }
 
             const year = now.getUTCFullYear();
@@ -183,6 +188,11 @@
             dateInput.value = `${year}-${month}-${day}`;
             timeInput.value = runTime;
         }
+
+        // Image loading error fallback
+        img.onerror = () => {
+            img.alt = "⚠️ 找不到此時效的預報圖，資料可能尚未生成或檔案不存在。";
+        };
 
         // Main Image URL Builder Function
         function updateImageSource() {
@@ -196,8 +206,6 @@
                 return;
             }
 
-            // 當選取 WNC 時，currentModel 會被設置為 "WNC"
-            // 產生的圖片路徑即為：ensemble-track/wp/WNC/YYYYMMDD/HHZ/240.png
             const imagePath = `ensemble-track/wp/${currentModel}/${sanitizedDate}/${formattedTime}/${currentFxx}.png`;
             img.src = imagePath;
             updateTimeText.innerText = `發佈/更新時間：${rawDate} (${formattedTime} run)`;
