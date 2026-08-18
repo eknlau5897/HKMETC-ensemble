@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 設置工作目錄
+# Working directory setup
 WORKSPACE="/Users/eknlau/VS_code/HKMETC-ensemble/"
 if [ -d "$WORKSPACE" ]; then
     cd "$WORKSPACE" || exit 1
@@ -8,7 +8,7 @@ fi
 
 echo "========================================================="
 echo " Starting Unified HKMETC Engine Pipeline"
-echo " (ECMWF, AIFS, GENC, FNV3, WNC/FNV3.2)"
+echo " (ECMWF, AIFS, GENC, FNV3.0, FNV3.1, WNC/FNV3.2)"
 echo "========================================================="
 
 while true; do
@@ -53,6 +53,9 @@ else:
     init_date_dt = now_utc - timedelta(days=1)
     init_time = 12
 
+# Map extent set to [100, 140, 7, 36]
+extent = [100, 140, 7, 36]
+
 # Set forecast hours
 if model_type == "AIFS":
     forecast_hours = 360
@@ -60,14 +63,12 @@ if model_type == "AIFS":
     line_color, line_style = '#1e88e5', '--'
     title_prefix, title_color = "AIFS", '#0d47a1'
     subtitle = f"{forecast_hours}-hour Forecast (aifs-ens)"
-    extent = [100, 180, 0, 60]
 else:
     forecast_hours = 144 if init_time in [6, 18] else 360
     client_kwargs = {"source": "ecmwf", "model": "ifs"}
     line_color, line_style = '#546e7a', '-'
     title_prefix, title_color = "ECMWF", '#1a237e'
     subtitle = f"{forecast_hours}-hour Forecast"
-    extent = [100, 160, 7, 45]
 
 init_date = init_date_dt.strftime("%Y-%m-%d")
 date_folder = init_date_dt.strftime("%Y%m%d")
@@ -98,7 +99,7 @@ try:
     )
     df = df.dropna(subset=['year', 'month', 'day', 'hour', 'longitude', 'latitude']).copy()
 
-    # FIX 1: Robust zero-padding for typicalTime to format as HHMMSS before parsing
+    # Robust zero-padding for typicalTime formatting
     b_date = df['typicalDate'].astype(int).astype(str)
     b_time = df['typicalTime'].astype(int).astype(str).str.zfill(6)
     df['base_dt'] = pd.to_datetime(b_date + b_time, format='%Y%m%d%H%M%S', errors='coerce')
@@ -156,12 +157,9 @@ EOF
     done
 
     # =========================================================
-    # 2. GOOGLE WEATHER LAB PIPELINE (GENC, FNV3 & WNC/FNV3.2)
+    # 2. GOOGLE WEATHER LAB PIPELINE (GENC, FNV3.0, FNV3.1 & WNC)
     # =========================================================
-   # =========================================================
-    # 2. GOOGLE WEATHER LAB PIPELINE (HARDENED DIAGNOSTIC)
-    # =========================================================
-    echo "--> Running Google Weather Lab Engine (GENC, FNV3 & WNC/FNV3.2)..."
+    echo "--> Running Google Weather Lab Engine (GENC, FNV3.0, FNV3.1 & WNC/FNV3.2)..."
     python3.11 << 'EOF'
 import os
 import requests
@@ -177,9 +175,10 @@ import cartopy.feature as cfeature
 base_path = "/Users/eknlau/VS_code/HKMETC-ensemble/ensemble-track/wp"
 
 models = {
-    "GENC": {"url_id": "genc", "title": "GENC Ensemble Tracks - HKMETC"},
-    "FNV3": {"url_id": "fnv3", "title": "FNV3 Ensemble Tracks - HKMETC"},
-    "WNC":  {"url_id": "wnc",  "title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
+    "GENC":   {"url_keys": ["genc"],            "title": "GENC Ensemble Tracks - HKMETC"},
+    "FNV3":   {"url_keys": ["fnv3"],            "title": "FNV3.0 Ensemble Tracks - HKMETC"},
+    "FNV3.1": {"url_keys": ["fnv3_1", "fnv3.1"], "title": "FNV3.1 Ensemble Tracks - HKMETC"},
+    "WNC":    {"url_keys": ["wnc", "fnv3_2"],   "title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
 }
 
 bounds = [900, 915, 930, 945, 960, 970, 980, 990, 1000, 1010]
@@ -189,15 +188,25 @@ norm = mcolors.BoundaryNorm(bounds, cmap.N)
 for model_name, cfg in models.items():
     print(f"[{datetime.now()}] Initializing search engine for {model_name}...")
     success = False
-    url_id = cfg["url_id"]
     
-    # AI models publish primarily on 00Z and 12Z runs with a lag
-    for lookback_hours in range(6, 121, 6):
+    for lookback_hours in range(0, 121, 6):
         now_utc = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
         
-        # Snap to 12Z or 00Z cycles
-        init_time = 12 if now_utc.hour >= 12 else 0
-        init_date_dt = now_utc.replace(hour=init_time, minute=0, second=0, microsecond=0)
+        if now_utc.hour >= 19:
+            init_date_dt = now_utc
+            init_time = 12
+        elif now_utc.hour >= 13:
+            init_date_dt = now_utc
+            init_time = 6
+        elif now_utc.hour >= 7:
+            init_date_dt = now_utc
+            init_time = 0
+        elif now_utc.hour >= 1:
+            init_date_dt = now_utc - timedelta(days=1)
+            init_time = 18
+        else:
+            init_date_dt = now_utc - timedelta(days=1)
+            init_time = 12
 
         yyyy = init_date_dt.strftime("%Y")
         mm = init_date_dt.strftime("%m")
@@ -205,27 +214,30 @@ for model_name, cfg in models.items():
         date_folder = f"{yyyy}{mm}{dd}"
         cycle_str = f"{init_time:02d}Z"
         
-        # Try both timestamp variants (e.g. T0_00/T12_00 vs T00_00/T12_00)
-        timestamp_candidates = [
-            f"{yyyy}_{mm}_{dd}T{init_time}_00",
-            f"{yyyy}_{mm}_{dd}T{init_time:02d}_00"
+        time_stamps = [
+            f"{yyyy}_{mm}_{dd}T{init_time:02d}_00", # T06_00
+            f"{yyyy}_{mm}_{dd}T{init_time}_00"      # T6_00
         ]
         
         r = None
         target_url = ""
-        for ts_str in timestamp_candidates:
-            candidate_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{url_id}/ensemble/cyclogenesis/csv/{url_id}_{ts_str}_cyclogenesis.csv"
-            try:
-                res = requests.get(candidate_url, timeout=8)
-                if res.status_code == 200 and not res.text.lstrip().startswith("<!DOCTYPE html>") and "<html" not in res.text.lower():
-                    r = res
-                    target_url = candidate_url
-                    break
-            except Exception:
-                continue
+        
+        for url_id in cfg["url_keys"]:
+            for ts in time_stamps:
+                candidate_url = f"https://deepmind.google.com/science/weatherlab/download/cyclones/{url_id}/ensemble/cyclogenesis/csv/{url_id}_{ts}_cyclogenesis.csv"
+                try:
+                    res = requests.get(candidate_url, timeout=8)
+                    if res.status_code == 200 and not res.text.lstrip().startswith("<!DOCTYPE html>") and "<html" not in res.text.lower():
+                        r = res
+                        target_url = candidate_url
+                        break
+                except Exception:
+                    continue
+            if r is not None:
+                break
 
         if r is None:
-            print(f"    [DEBUG] Skipping {model_name} ({date_folder} {cycle_str}): HTTP 404/Invalid")
+            print(f"    [DEBUG] Skipping {model_name} ({date_folder} {cycle_str}): HTTP 404")
             continue
             
         try:
@@ -233,7 +245,7 @@ for model_name, cfg in models.items():
             run_dir = os.path.join(path_2, date_folder, cycle_str)
             os.makedirs(run_dir, exist_ok=True)
             
-            local_csv_path = os.path.join(run_dir, f"{model_name.lower()}-unpaired-NWP.csv")
+            local_csv_path = os.path.join(run_dir, f"{model_name.lower().replace('.', '')}-unpaired-NWP.csv")
             archive_png = os.path.join(run_dir, "240.png")            
             latest_png = os.path.join(path_2, "240.png")
             
@@ -256,7 +268,8 @@ for model_name, cfg in models.items():
 
             fig = plt.figure(figsize=(12, 9), dpi=100)
             ax_2 = plt.axes(projection=ccrs.PlateCarree())
-            ax_2.set_extent([100, 180, 0, 60], crs=ccrs.PlateCarree())
+            # Map extent set to [100, 140, 7, 36]
+            ax_2.set_extent([100, 140, 7, 36], crs=ccrs.PlateCarree())
 
             ax_2.add_feature(cfeature.COASTLINE, linewidth=0.6, zorder=2)
             ax_2.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.4, zorder=2)
@@ -289,7 +302,7 @@ for model_name, cfg in models.items():
             plt.savefig(latest_png, bbox_inches='tight')  
             plt.close(fig)
             
-            print(f"--> [SUCCESS] Processed {model_name} {cycle_str} via {target_url}!")
+            print(f"--> [SUCCESS] Processed {model_name} ({cycle_str}) from {target_url}!")
             success = True
             break 
             
@@ -324,7 +337,7 @@ EOF
     elif [ "$CURRENT_HOUR" -lt 8 ]; then NEXT_TARGET=8
     elif [ "$CURRENT_HOUR" -lt 14 ]; then NEXT_TARGET=14
     elif [ "$CURRENT_HOUR" -lt 20 ]; then NEXT_TARGET=20
-    else NEXT_TARGET=26 # 26 means 02:00Z next day
+    else NEXT_TARGET=26 # 02:00Z next day
     fi
 
     HOURS_TO_WAIT=$((NEXT_TARGET - CURRENT_HOUR - 1))
