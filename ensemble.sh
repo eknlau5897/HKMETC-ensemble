@@ -175,7 +175,7 @@ import cartopy.feature as cfeature
 base_path = "/Users/eknlau/VS_code/HKMETC-ensemble/ensemble-track/wp"
 
 models = {
-    "FNV3":   {"url_keys": ["FNV3P0"],            "title": "FNV3.0 Ensemble Tracks - HKMETC"},
+    "FNV3":   {"url_keys": ["FNV3P0","FNV3P0"],            "title": "FNV3.0 Ensemble Tracks - HKMETC"},
     "FNV3.1": {"url_keys": ["FNV3P1", "FNV3P1"], "title": "FNV3.1 Ensemble Tracks - HKMETC"},
     "WNC":    {"url_keys": ["FNV3P2", "FNV3P2"],   "title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
 }
