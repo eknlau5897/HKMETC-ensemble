@@ -175,10 +175,9 @@ import cartopy.feature as cfeature
 base_path = "/Users/eknlau/VS_code/HKMETC-ensemble/ensemble-track/wp"
 
 models = {
-    "GENC":   {"url_keys": ["genc"],            "title": "GENC Ensemble Tracks - HKMETC"},
-    "FNV3":   {"url_keys": ["fnv3"],            "title": "FNV3.0 Ensemble Tracks - HKMETC"},
-    "FNV3.1": {"url_keys": ["fnv3_1", "fnv3.1"], "title": "FNV3.1 Ensemble Tracks - HKMETC"},
-    "WNC":    {"url_keys": ["wnc", "fnv3_2"],   "title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
+    "FNV3":   {"url_keys": ["FNV3P0"],            "title": "FNV3.0 Ensemble Tracks - HKMETC"},
+    "FNV3.1": {"url_keys": ["FNV3P1", "FNV3P1"], "title": "FNV3.1 Ensemble Tracks - HKMETC"},
+    "WNC":    {"url_keys": ["FNV3P2", "FNV3P2"],   "title": "FNV3.2 (WNC) Ensemble Tracks - HKMETC"}
 }
 
 bounds = [900, 915, 930, 945, 960, 970, 980, 990, 1000, 1010]
